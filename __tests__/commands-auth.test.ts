@@ -125,7 +125,7 @@ describe("authenticateServer", () => {
     );
   });
 
-  it("surfaces the OAuth URL and accepts a pasted remote callback", async () => {
+  it("surfaces the OAuth URL as one terminal hyperlink and accepts a pasted remote callback", async () => {
     const authorizationUrl = "https://auth.example.com/authorize?resource=https%3A%2F%2Fmcp.sentry.dev%2Fmcp";
     const callbackUrl = "http://localhost:3118/callback?code=code&state=state";
     const inputController = new AbortController();
@@ -160,12 +160,12 @@ describe("authenticateServer", () => {
       },
     );
     expect(ui.notify).toHaveBeenCalledWith(
-      expect.stringContaining(authorizationUrl),
+      expect.stringContaining(`\u001B]8;;${authorizationUrl}\u001B\\${authorizationUrl}\u001B]8;;\u001B\\`),
       "info",
     );
     expect(ui.confirm).toHaveBeenCalledWith(
       "Authorize sentry",
-      expect.stringContaining(authorizationUrl),
+      expect.stringContaining(`\u001B]8;;${authorizationUrl}\u001B\\${authorizationUrl}\u001B]8;;\u001B\\`),
       { signal: inputController.signal },
     );
     expect(ui.input).toHaveBeenCalledWith(

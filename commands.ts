@@ -25,6 +25,10 @@ import { loadOnboardingState, markSetupCompleted as persistSetupCompleted, markS
 import { openPath, resolveServerUrl, sanitizeTerminalText } from "./utils.ts";
 import { isAbortError } from "./runtime-owner.ts";
 
+function terminalHyperlink(label: string, url: string): string {
+  return `\u001B]8;;${sanitizeTerminalText(url)}\u001B\\${sanitizeTerminalText(label)}\u001B]8;;\u001B\\`;
+}
+
 export async function showStatus(state: McpExtensionState, ctx: ExtensionContext): Promise<void> {
   if (!ctx.hasUI) return;
 
@@ -273,17 +277,17 @@ export async function authenticateServer(
       ...(authStorageOptions.baseDir ? { authStorageOptions } : {}),
       onAuthorizationUrl: (authorizationUrl) => {
         ui.notify(
-          `Open this URL to authenticate ${serverName}:\n\n${authorizationUrl}\n\n` +
+          `Open this URL to authenticate ${serverName}:\n\n${terminalHyperlink(authorizationUrl, authorizationUrl)}\n\n` +
           "After approving, Pi will complete automatically if the browser can reach its localhost callback. " +
           "On a remote machine, copy the full localhost URL from the browser address bar and paste it into Pi.",
           "info"
         );
       },
       onAuthorizationInput: async (authorizationUrl, inputSignal) => {
-        const clickableUrl = `\u001b]8;;${authorizationUrl}\u001b\\${authorizationUrl}\u001b]8;;\u001b\\`;
         const readyToPaste = await ui.confirm(
           `Authorize ${serverName}`,
-          `Open this link in your browser:\n${clickableUrl}\n\nAfter approving access, select Yes to paste the callback URL.`,
+          `Open this link in your browser:\n${terminalHyperlink(authorizationUrl, authorizationUrl)}\n\n` +
+          "After approving access, select Yes to paste the callback URL.",
           { signal: inputSignal },
         );
         if (!readyToPaste || inputSignal.aborted) return undefined;
