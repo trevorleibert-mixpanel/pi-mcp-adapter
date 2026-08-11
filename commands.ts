@@ -279,11 +279,20 @@ export async function authenticateServer(
           "info"
         );
       },
-      onAuthorizationInput: (_authorizationUrl, inputSignal) => ui.input(
-        `Complete ${serverName} OAuth`,
-        "Paste the full callback URL, or wait for automatic completion",
-        { signal: inputSignal },
-      ),
+      onAuthorizationInput: async (authorizationUrl, inputSignal) => {
+        const clickableUrl = `\u001b]8;;${authorizationUrl}\u001b\\${authorizationUrl}\u001b]8;;\u001b\\`;
+        const readyToPaste = await ui.confirm(
+          `Authorize ${serverName}`,
+          `Open this link in your browser:\n${clickableUrl}\n\nAfter approving access, select Yes to paste the callback URL.`,
+          { signal: inputSignal },
+        );
+        if (!readyToPaste || inputSignal.aborted) return undefined;
+        return ui.input(
+          `Complete ${serverName} OAuth`,
+          "Paste the full callback URL",
+          { signal: inputSignal },
+        );
+      },
       ...(signal ? { signal } : {}),
       ...(runtime ? { runtime } : {}),
     });
