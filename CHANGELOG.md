@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added interactive callback URL pasting to `/mcp-auth` for OAuth flows running on remote or headless machines.
+
 ### Fixed
 - Stopped load-time MCP initialization from printing a TUI startup error when Pi action methods are not bound yet. Thanks @21307369 for issue #327.
 
