@@ -271,9 +271,12 @@ export function formatMcpResultTitle(toolName: string, details: McpToolResultDet
       return server ? `mcp connect ${server}` : "mcp connect";
     case "describe": {
       const tool = details?.tool;
-      const name = tool && typeof tool === "object" && "name" in tool && typeof (tool as { name?: unknown }).name === "string"
+      const resolvedName = tool && typeof tool === "object" && "name" in tool && typeof (tool as { name?: unknown }).name === "string"
         ? (tool as { name: string }).name
         : undefined;
+      // Falls back to the requested (possibly not-found) tool name so a
+      // "describe" of an unknown tool still names what was looked up.
+      const name = resolvedName ?? (typeof details?.requestedTool === "string" ? details.requestedTool : undefined);
       return name ? `mcp describe ${name}` : "mcp describe";
     }
     case "search":
@@ -283,6 +286,8 @@ export function formatMcpResultTitle(toolName: string, details: McpToolResultDet
     case "auth-start":
     case "auth-complete":
       return server ? `mcp auth ${server}` : "mcp auth";
+    case "status":
+      return "mcp status";
     default:
       return "mcp";
   }

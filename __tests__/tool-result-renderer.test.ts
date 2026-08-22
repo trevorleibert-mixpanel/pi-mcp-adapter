@@ -308,8 +308,14 @@ describe("formatMcpResultTitle", () => {
     expect(formatMcpResultTitle("mcp", { mode: "search", query: "figma" })).toBe('mcp search "figma"');
     expect(formatMcpResultTitle("mcp", { mode: "list", server: "figma" })).toBe("mcp list figma");
     expect(formatMcpResultTitle("mcp", { mode: "auth-start", server: "figma" })).toBe("mcp auth figma");
-    expect(formatMcpResultTitle("mcp", { mode: "status" })).toBe("mcp");
+    expect(formatMcpResultTitle("mcp", { mode: "status" })).toBe("mcp status");
     expect(formatMcpResultTitle("mcp", undefined)).toBe("mcp");
+  });
+
+  it("names the requested (not-found) tool when describe fails", () => {
+    expect(formatMcpResultTitle("mcp", { mode: "describe", error: "tool_not_found", requestedTool: "bogus_tool" })).toBe(
+      "mcp describe bogus_tool",
+    );
   });
 });
 
@@ -332,7 +338,7 @@ describe("buildPendantToolResultDetails", () => {
 
   it("fences plain text and expands on error", () => {
     const details = buildPendantToolResultDetails("mcp", result([{ type: "text", text: "boom" }], { mode: "status" }), true);
-    expect(details?.pendant.title).toBe("mcp");
+    expect(details?.pendant.title).toBe("mcp status");
     expect(details?.pendant.markdown).toBe("\u26a0\ufe0f error\n\n```\nboom\n```");
     expect(details?.pendant.expanded).toBe(true);
   });
