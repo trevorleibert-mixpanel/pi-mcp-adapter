@@ -14,7 +14,7 @@ import { logger } from "./logger.ts";
 import { executeAuthComplete, executeAuthStart, executeCall, executeConnect, executeDescribe, executeInstructions, executeList, executeSearch, executeStatus, executeUiMessages } from "./proxy-modes.ts";
 import { formatTerminalError, getConfigPathFromArgv, normalizeDirectToolInputSchema, truncateAtWord } from "./utils.ts";
 import { createOAuthRuntime, shutdownOAuth } from "./mcp-auth-flow.ts";
-import { createMcpDirectToolCallRenderer, renderMcpProxyToolCall, renderMcpToolResult } from "./tool-result-renderer.ts";
+import { buildPendantToolResultDetails, createMcpDirectToolCallRenderer, renderMcpProxyToolCall, renderMcpToolResult } from "./tool-result-renderer.ts";
 import { toolErrorOverride } from "./error-signal.ts";
 import { createMcpRuntimeOwner, createOwnedUi, isAbortError, type McpRuntimeOwner } from "./runtime-owner.ts";
 import { publishMcpStatusShutdown } from "./mcp-status.ts";
@@ -437,8 +437,29 @@ function installMcpAdapter(pi: ExtensionAPI, options: McpAdapterOptions) {
     }
   });
 
-  // Re-flag returned MCP tool failures so pi registers them as errors (see toolErrorOverride).
-  pi.on("tool_result", (event) => toolErrorOverride(event.details));
+  // Re-flag returned MCP tool failures so pi registers them as errors (see
+  // toolErrorOverride), and let Pendant (the VS Code extension) render
+  // mcp/mcpScript results from `details.pendant` instead of a generic JSON
+  // dump. pi itself chains multiple `pi.on("tool_result", ...)` registrations
+  // fine, but combined into this one handler to keep both concerns in a
+  // single, easily testable place. The Pendant part is a no-op outside RPC
+  // mode (Pendant's transport), so TUI/print sessions don't carry the field.
+  pi.on("tool_result", (event, ctx) => {
+    const errorOverride = toolErrorOverride(event.details);
+    const isError = errorOverride?.isError ?? event.isError === true;
+
+    let pendant: ReturnType<typeof buildPendantToolResultDetails>;
+    if (ctx?.mode === "rpc" && (event.toolName === "mcp" || event.toolName === "mcpScript")) {
+      const details = (event.details ?? {}) as Record<string, unknown>;
+      pendant = buildPendantToolResultDetails(event.toolName, { content: event.content, details }, isError);
+    }
+
+    if (!errorOverride && !pendant) return undefined;
+    return {
+      ...errorOverride,
+      ...(pendant ? { details: { ...(event.details as Record<string, unknown> ?? {}), ...pendant } } : {}),
+    };
+  });
 
   pi.registerCommand("mcp", {
     description: "Show MCP server status",

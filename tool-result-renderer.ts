@@ -251,6 +251,89 @@ export function formatMcpToolResultIdentity(details: McpToolResultDetails | unde
   return null;
 }
 
+/**
+ * Human-readable title for an mcp/mcpScript result, reusing the resolved
+ * server/tool identity when available (see formatMcpToolResultIdentity) and
+ * falling back to the proxy mode for status/search/connect/etc. Used by
+ * Pendant (the VS Code extension), which shows this as the tool call's row
+ * title instead of the tool's static registration label ("MCP").
+ */
+export function formatMcpResultTitle(toolName: string, details: McpToolResultDetails | undefined): string {
+  if (toolName === "mcpScript") return "mcpScript";
+
+  const identity = formatMcpToolResultIdentity(details);
+  if (identity) return identity.replace(/^MCP /, "").replace("/", " \u2192 ");
+
+  const mode = typeof details?.mode === "string" ? details.mode : undefined;
+  const server = typeof details?.server === "string" ? details.server : undefined;
+  switch (mode) {
+    case "connect":
+      return server ? `mcp connect ${server}` : "mcp connect";
+    case "describe": {
+      const tool = details?.tool;
+      const resolvedName = tool && typeof tool === "object" && "name" in tool && typeof (tool as { name?: unknown }).name === "string"
+        ? (tool as { name: string }).name
+        : undefined;
+      // Falls back to the requested (possibly not-found) tool name so a
+      // "describe" of an unknown tool still names what was looked up.
+      const name = resolvedName ?? (typeof details?.requestedTool === "string" ? details.requestedTool : undefined);
+      return name ? `mcp describe ${name}` : "mcp describe";
+    }
+    case "search":
+      return typeof details?.query === "string" ? `mcp search "${details.query}"` : "mcp search";
+    case "list":
+      return server ? `mcp list ${server}` : "mcp list";
+    case "auth-start":
+    case "auth-complete":
+      return server ? `mcp auth ${server}` : "mcp auth";
+    case "status":
+      return "mcp status";
+    default:
+      return "mcp";
+  }
+}
+
+function fenceForPendant(text: string): string {
+  const trimmed = text.trim();
+  try {
+    JSON.parse(trimmed);
+    return `\`\`\`json\n${trimmed}\n\`\`\``;
+  } catch {
+    return `\`\`\`\n${text}\n\`\`\``;
+  }
+}
+
+export interface PendantToolResultDetails {
+  pendant: { title: string; markdown: string; expanded?: boolean };
+}
+
+/**
+ * Builds the `details.pendant` payload Pendant (the VS Code extension) reads
+ * off a tool_result to render an mcp/mcpScript call's row title and body in
+ * its webview, instead of a generic JSON dump under the tool's static label.
+ * Returns undefined when there's no text content to show.
+ *
+ * `title`/`markdown`/`expanded` aren't publicly documented; confirmed by
+ * live A/B testing against Pendant 0.30.1 (cdervis.vscode-pi). `label` was
+ * also tried and does nothing. If Pendant changes this shape, this is the
+ * only place that needs updating.
+ */
+export function buildPendantToolResultDetails(
+  toolName: string,
+  result: Pick<AgentToolResult<McpToolResultDetails>, "content" | "details">,
+  isError: boolean,
+): PendantToolResultDetails | undefined {
+  const text = result.content
+    .filter((block): block is Extract<McpToolContentBlock, { type: "text" }> => block.type === "text")
+    .map((block) => block.text)
+    .join("\n\n");
+  if (!text) return undefined;
+
+  const title = formatMcpResultTitle(toolName, result.details);
+  const markdown = isError ? `\u26a0\ufe0f error\n\n${fenceForPendant(text)}` : fenceForPendant(text);
+  return { pendant: { title, markdown, expanded: isError } };
+}
+
 export function formatMcpToolResultLines(
   result: Pick<AgentToolResult<McpToolResultDetails>, "content">,
   expanded: boolean,

@@ -1,9 +1,11 @@
 import type { AgentToolResult, ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import {
+  buildPendantToolResultDetails,
   createMcpDirectToolCallRenderer,
   formatMcpDirectToolCallLines,
   formatMcpProxyToolCallLines,
+  formatMcpResultTitle,
   formatMcpToolResultIdentity,
   formatMcpToolResultLines,
   renderMcpProxyToolCall,
@@ -287,5 +289,67 @@ describe("MCP tool call renderers without a theme", () => {
   it("renders direct calls without a theme", () => {
     const output = createMcpDirectToolCallRenderer("test_tool")({ key: "value" }).render(80).join("\n");
     expect(output).toContain("test_tool");
+  });
+});
+
+describe("formatMcpResultTitle", () => {
+  it("always titles mcpScript regardless of details", () => {
+    expect(formatMcpResultTitle("mcpScript", { mode: "script" })).toBe("mcpScript");
+    expect(formatMcpResultTitle("mcpScript", undefined)).toBe("mcpScript");
+  });
+
+  it("reuses the resolved server/tool identity for a call", () => {
+    expect(formatMcpResultTitle("mcp", { mode: "call", server: "github", tool: "get_me" })).toBe("github \u2192 get_me");
+  });
+
+  it("falls back to the proxy mode for non-call actions", () => {
+    expect(formatMcpResultTitle("mcp", { mode: "connect", server: "figma" })).toBe("mcp connect figma");
+    expect(formatMcpResultTitle("mcp", { mode: "describe", tool: { name: "get_nodes" } })).toBe("mcp describe get_nodes");
+    expect(formatMcpResultTitle("mcp", { mode: "search", query: "figma" })).toBe('mcp search "figma"');
+    expect(formatMcpResultTitle("mcp", { mode: "list", server: "figma" })).toBe("mcp list figma");
+    expect(formatMcpResultTitle("mcp", { mode: "auth-start", server: "figma" })).toBe("mcp auth figma");
+    expect(formatMcpResultTitle("mcp", { mode: "status" })).toBe("mcp status");
+    expect(formatMcpResultTitle("mcp", undefined)).toBe("mcp");
+  });
+
+  it("names the requested (not-found) tool when describe fails", () => {
+    expect(formatMcpResultTitle("mcp", { mode: "describe", error: "tool_not_found", requestedTool: "bogus_tool" })).toBe(
+      "mcp describe bogus_tool",
+    );
+  });
+});
+
+describe("buildPendantToolResultDetails", () => {
+  it("returns undefined when there's no text content", () => {
+    expect(buildPendantToolResultDetails("mcp", result([]), false)).toBeUndefined();
+    expect(buildPendantToolResultDetails("mcp", result([{ type: "text", text: "" }]), false)).toBeUndefined();
+  });
+
+  it("fences JSON text and titles a resolved call", () => {
+    const details = buildPendantToolResultDetails(
+      "mcp",
+      result([{ type: "text", text: '{"login":"andyleap"}' }], { mode: "call", server: "github", tool: "get_me" }),
+      false,
+    );
+    expect(details?.pendant.title).toBe("github \u2192 get_me");
+    expect(details?.pendant.markdown).toBe('```json\n{"login":"andyleap"}\n```');
+    expect(details?.pendant.expanded).toBe(false);
+  });
+
+  it("fences plain text and expands on error", () => {
+    const details = buildPendantToolResultDetails("mcp", result([{ type: "text", text: "boom" }], { mode: "status" }), true);
+    expect(details?.pendant.title).toBe("mcp status");
+    expect(details?.pendant.markdown).toBe("\u26a0\ufe0f error\n\n```\nboom\n```");
+    expect(details?.pendant.expanded).toBe(true);
+  });
+
+  it("joins multiple text blocks and ignores non-text blocks", () => {
+    const details = buildPendantToolResultDetails(
+      "mcpScript",
+      result([{ type: "text", text: "a" }, { type: "image", data: "x", mimeType: "image/png" } as never, { type: "text", text: "b" }]),
+      false,
+    );
+    expect(details?.pendant.title).toBe("mcpScript");
+    expect(details?.pendant.markdown).toBe("```\na\n\nb\n```");
   });
 });
