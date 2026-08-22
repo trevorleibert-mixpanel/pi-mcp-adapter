@@ -1361,4 +1361,41 @@ describe("mcpAdapter session lifecycle", () => {
     // a precondition code is not a tool-execution failure -> left untouched
     expect(toolResult?.({ details: { error: "auth_required", server: "demo" } })).toBeUndefined();
   });
+
+  it("only adds Pendant rendering details for mcp/mcpScript results in RPC mode", async () => {
+    const { default: mcpAdapter } = await import("../index.ts");
+    const { api, handlers } = createPi();
+    mcpAdapter(api);
+
+    const toolResult = handlers.get("tool_result");
+    const rpcCtx = { mode: "rpc" as const };
+    const mcpEvent = {
+      toolName: "mcp",
+      content: [{ type: "text" as const, text: '{"ok":true}' }],
+      details: { mode: "call", server: "github", tool: "get_me" },
+    };
+
+    // outside RPC mode (e.g. TUI) -> no pendant field added
+    expect(toolResult?.(mcpEvent)).toBeUndefined();
+
+    // RPC mode, mcp tool -> pendant title/markdown added alongside existing details
+    const rpcResult = toolResult?.(mcpEvent, rpcCtx) as { details: Record<string, unknown> };
+    expect(rpcResult.details.mode).toBe("call");
+    expect(rpcResult.details.pendant).toEqual({
+      title: "github \u2192 get_me",
+      markdown: '```json\n{"ok":true}\n```',
+      expanded: false,
+    });
+
+    // RPC mode, non-mcp tool -> untouched
+    expect(toolResult?.({ toolName: "read", content: [{ type: "text", text: "hi" }], details: {} }, rpcCtx)).toBeUndefined();
+
+    // RPC mode, mcp tool, but an mcp error result -> isError override AND pendant both applied
+    const errorResult = toolResult?.(
+      { toolName: "mcp", content: [{ type: "text", text: "boom" }], details: { mode: "call", error: "tool_error", server: "github" } },
+      rpcCtx,
+    ) as { isError: true; details: Record<string, unknown> };
+    expect(errorResult.isError).toBe(true);
+    expect((errorResult.details.pendant as { expanded: boolean }).expanded).toBe(true);
+  });
 });
